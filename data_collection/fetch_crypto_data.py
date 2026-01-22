@@ -3,39 +3,46 @@ import pandas as pd
 import os
 from datetime import datetime
 
-SYMBOLS = [
-    "BTCUSDT", "ETHUSDT", "BNBUSDT", "XRPUSDT",
-    "ADAUSDT", "SOLUSDT", "DOGEUSDT", "DOTUSDT",
-    "LTCUSDT", "TRXUSDT"
-]
+SYMBOLS = {
+    "BTC": "BTCUSDT",
+    "ETH": "ETHUSDT",
+    "BNB": "BNBUSDT",
+    "XRP": "XRPUSDT",
+    "ADA": "ADAUSDT",
+    "SOL": "SOLUSDT",
+    "DOGE": "DOGEUSDT",
+    "DOT": "DOTUSDT",
+    "LTC": "LTCUSDT",
+    "TRX": "TRXUSDT"
+}
 
 RAW_PATH = "../data/raw/raw_data.csv"
 PROCESSED_PATH = "../data/processed/processed_data.csv"
 
-def fetch_historical_data():
-    all_data = []
+def fetch_crypto_data(days=365):
+    all_records = []
 
-    for symbol in SYMBOLS:
-        print(f"Fetching historical data for {symbol}...")
+    for coin, symbol in SYMBOLS.items():
+        print(f"Fetching {coin} historical OHLCV data...")
+
         url = "https://api.binance.com/api/v3/klines"
-
         params = {
             "symbol": symbol,
             "interval": "1d",
-            "limit": 365
+            "limit": days
         }
 
         response = requests.get(url, params=params)
         data = response.json()
 
         if isinstance(data, dict):
-            print(f"Failed for {symbol}")
+            print(f"Failed for {coin}")
             continue
 
         for row in data:
-            all_data.append({
-                "coin": symbol.replace("USDT", ""),
+            all_records.append({
                 "date": datetime.fromtimestamp(row[0] / 1000),
+                "coin": coin,
                 "open": float(row[1]),
                 "high": float(row[2]),
                 "low": float(row[3]),
@@ -43,11 +50,11 @@ def fetch_historical_data():
                 "volume": float(row[5])
             })
 
-    if not all_data:
-        print("No historical data fetched")
+    if not all_records:
+        print("No data collected")
         return
 
-    df_raw = pd.DataFrame(all_data)
+    df_raw = pd.DataFrame(all_records)
     df_processed = df_raw.copy()
 
     # Cleaning
@@ -60,9 +67,9 @@ def fetch_historical_data():
     df_raw.to_csv(RAW_PATH, index=False)
     df_processed.to_csv(PROCESSED_PATH, index=False)
 
-    print("Historical data saved successfully")
-    print(f"Raw records: {len(df_raw)}")
-    print(f"Processed records: {len(df_processed)}")
+    print("OHLCV historical data saved")
+    print(f"Raw rows: {len(df_raw)}")
+    print(f"Processed rows: {len(df_processed)}")
 
 if __name__ == "__main__":
-    fetch_historical_data()
+    fetch_crypto_data()
