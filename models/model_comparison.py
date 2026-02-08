@@ -40,6 +40,9 @@ class ModelComparison:
         
         # Filter by coin
         coin_data = df[df['coin'] == self.coin].copy()
+        if coin_data.empty:
+            raise ValueError(f"No data found for coin '{self.coin}'. Available: {sorted(df['coin'].unique().tolist())}")
+        
         coin_data['date'] = pd.to_datetime(coin_data['date'])
         coin_data = coin_data.sort_values('date')
         
@@ -284,39 +287,86 @@ class ModelComparison:
         return summary_df
 
 
-def main():
+def get_available_coins(data_path):
+    """Get list of unique coins from the data."""
+    df = pd.read_csv(data_path)
+    return sorted(df['coin'].unique().tolist())
+
+
+def main(coins=None):
     """
-    Main execution function
+    Main execution function.
+    
+    Args:
+        coins: List of coin symbols to analyze (e.g. ['BTC', 'ETH']), 
+               or None/'all' to run for all coins in the data.
     """
-    # Initialize comparison
     data_path = '../data/processed/processed_data.csv'
-    comparison = ModelComparison(data_path, coin='BTC')
     
-    # Load data
-    comparison.load_data()
+    if coins is None or coins == 'all':
+        coins = get_available_coins(data_path)
+        print(f"Running for all {len(coins)} coins: {coins}\n")
+    else:
+        coins = [c.upper() for c in coins] if isinstance(coins, list) else [str(coins).upper()]
     
-    # Train all models
-    print("\n" + "="*60)
-    print("TRAINING MODELS")
-    print("="*60 + "\n")
+    all_results = {}
     
-    comparison.train_arima(order=(5, 1, 2))
-    comparison.train_lstm(epochs=50)
-    comparison.train_prophet()
+    for coin in coins:
+        print("\n" + "="*70)
+        print(f"ANALYZING {coin}")
+        print("="*70)
+        
+        comparison = ModelComparison(data_path, coin=coin)
+        
+        try:
+            comparison.load_data()
+        except Exception as e:
+            print(f"Skipping {coin}: {e}")
+            continue
+        
+        # Train all models
+        print("\n" + "-"*60)
+        print("TRAINING MODELS")
+        print("-"*60 + "\n")
+        
+        try:
+            comparison.train_arima(order=(5, 1, 2))
+            comparison.train_lstm(epochs=50)
+            comparison.train_prophet()
+        except Exception as e:
+            print(f"Error training models for {coin}: {e}")
+            continue
+        
+        # Store results
+        comparison.compare_models()
+        summary = comparison.get_forecast_summary()
+        all_results[coin] = {
+            'comparison': comparison,
+            'metrics': {m: comparison.models[m]['metrics'] for m in comparison.models}
+        }
+        
+        # Plot results for this coin
+        print(f"\nGenerating plots for {coin}...")
+        comparison.plot_comparison()
+        comparison.plot_forecasts()
     
-    # Compare models
-    comparison.compare_models()
-    
-    # Get forecast summary
-    comparison.get_forecast_summary()
-    
-    # Plot results
-    print("\nGenerating comparison plots...")
-    comparison.plot_comparison()
-    comparison.plot_forecasts()
+    # Summary across all coins
+    if len(all_results) > 1:
+        print("\n" + "="*70)
+        print("CROSS-COIN SUMMARY (RMSE by model)")
+        print("="*70)
+        for model_name in ['ARIMA', 'LSTM', 'Prophet']:
+            model_metrics = {coin: data['metrics'].get(model_name, {}) for coin, data in all_results.items()}
+            rmse_by_coin = {coin: m.get('RMSE', np.nan) for coin, m in model_metrics.items()}
+            print(f"\n{model_name}: {rmse_by_coin}")
     
     print("\nAnalysis complete!")
 
 
 if __name__ == "__main__":
-    main()
+    import argparse
+    parser = argparse.ArgumentParser(description='Compare forecasting models for crypto prices')
+    parser.add_argument('--coin', nargs='*', default=None,
+                        help='Coin(s) to analyze (e.g. BTC ETH). Omit to run for all coins.')
+    args = parser.parse_args()
+    main(coins=args.coin if args.coin else 'all')

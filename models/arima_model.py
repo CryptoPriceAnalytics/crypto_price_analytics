@@ -215,4 +215,3 @@ def find_optimal_order(data, p_range=range(0, 6), d_range=range(0, 3), q_range=r
     
     print(f"Best ARIMA order: {best_order} with AIC: {best_aic:.2f}")
     return best_order, best_aic
-n
